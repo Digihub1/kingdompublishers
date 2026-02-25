@@ -6,4 +6,3 @@ qrcode[pil]
 psycopg2-binary
 gunicorn
 gevent
-vercel-wsgi
