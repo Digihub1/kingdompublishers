@@ -1,0 +1,9 @@
+Flask
+Flask-SQLAlchemy
+Flask-SocketIO
+python-dotenv
+qrcode[pil]
+psycopg2-binary
+gunicorn
+gevent
+vercel-wsgi

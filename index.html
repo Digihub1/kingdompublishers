@@ -1,0 +1,809 @@
+<!-- frontend/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hybrid POS System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --success-color: #27ae60;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+        }
+        
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .navbar {
+            background-color: var(--primary-color) !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .sidebar {
+            background-color: white;
+            min-height: calc(100vh - 56px);
+            box-shadow: 2px 0 4px rgba(0,0,0,0.1);
+        }
+        
+        .sidebar .nav-link {
+            color: #495057;
+            padding: 0.75rem 1rem;
+            border-left: 3px solid transparent;
+        }
+        
+        .sidebar .nav-link:hover,
+        .sidebar .nav-link.active {
+            background-color: #f8f9fa;
+            color: var(--secondary-color);
+            border-left-color: var(--secondary-color);
+        }
+        
+        .card {
+            border: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+        }
+        
+        .product-card {
+            cursor: pointer;
+            height: 100%;
+        }
+        
+        .product-card:hover {
+            border-color: var(--secondary-color);
+        }
+        
+        .barcode-display {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .status-online {
+            color: var(--success-color);
+        }
+        
+        .status-offline {
+            color: var(--danger-color);
+        }
+        
+        .cart-item {
+            border-bottom: 1px solid #dee2e6;
+            padding: 10px 0;
+        }
+        
+        .sync-indicator {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        
+        .offline-mode {
+            background-color: #fff3cd;
+            border-color: #ffeaa7;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">
+                <i class="bi bi-cart-check-fill me-2"></i>
+                Hybrid POS System
+            </a>
+            <div class="d-flex align-items-center">
+                <div class="me-3">
+                    <span class="badge bg-success" id="connectionStatus">
+                        <i class="bi bi-wifi"></i> Online
+                    </span>
+                </div>
+                <div class="dropdown">
+                    <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" id="deviceMenu" data-bs-toggle="dropdown">
+                        Device: <span id="currentDevice">POS-001</span>
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="#" onclick="changeDevice('POS-001')">POS-001 (Main Counter)</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="changeDevice('POS-002')">POS-002 (Kitchen)</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="changeDevice('POS-003')">POS-003 (Mobile)</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-2 col-lg-2 d-md-block sidebar collapse">
+                <div class="position-sticky pt-3">
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link active" href="#" onclick="showSection('pos')">
+                                <i class="bi bi-cart me-2"></i> POS Terminal
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" onclick="showSection('products')">
+                                <i class="bi bi-box-seam me-2"></i> Products
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" onclick="showSection('orders')">
+                                <i class="bi bi-receipt me-2"></i> Orders
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" onclick="showSection('sync')">
+                                <i class="bi bi-cloud-arrow-up me-2"></i> Sync Status
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#" onclick="showSection('dashboard')">
+                                <i class="bi bi-graph-up me-2"></i> Dashboard
+                            </a>
+                        </li>
+                    </ul>
+                    
+                    <div class="mt-4 p-3 bg-light rounded">
+                        <h6>Device Info</h6>
+                        <small class="text-muted d-block">ID: <span id="deviceIdInfo">POS-001</span></small>
+                        <small class="text-muted d-block">Last Sync: <span id="lastSyncInfo">Just now</span></small>
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" id="offlineModeToggle">
+                            <label class="form-check-label" for="offlineModeToggle">Offline Mode</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-md-10 col-lg-10 ms-sm-auto px-md-4">
+                <!-- POS Section -->
+                <div id="posSection" class="section">
+                    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                        <h2>POS Terminal</h2>
+                        <div class="btn-toolbar mb-2 mb-md-0">
+                            <div class="btn-group me-2">
+                                <button class="btn btn-sm btn-outline-secondary" onclick="printReceipt()">
+                                    <i class="bi bi-printer"></i> Print Receipt
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="clearCart()">
+                                    <i class="bi bi-trash"></i> Clear
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <!-- Products Grid -->
+                        <div class="col-md-8">
+                            <div class="row mb-3">
+                                <div class="col">
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                        <input type="text" class="form-control" placeholder="Search products..." id="productSearch">
+                                        <select class="form-select" id="categoryFilter">
+                                            <option value="">All Categories</option>
+                                            <option value="Food">Food</option>
+                                            <option value="Beverage">Beverage</option>
+                                            <option value="Dessert">Dessert</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row" id="productsGrid">
+                                <!-- Products will be loaded here -->
+                            </div>
+                        </div>
+
+                        <!-- Cart & Checkout -->
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-header bg-primary text-white">
+                                    <h5 class="mb-0">Current Order</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div id="cartItems">
+                                        <p class="text-muted text-center">Cart is empty</p>
+                                    </div>
+                                    
+                                    <div class="mt-3">
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span>Subtotal:</span>
+                                            <span id="subtotal">Ksh. 0.00</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-2">
+                                            <span>Tax (10%):</span>
+                                            <span id="tax">Ksh. 0.00</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between mb-3">
+                                            <span>Discount:</span>
+                                            <span id="discount">Ksh. 0.00</span>
+                                        </div>
+                                        <div class="d-flex justify-content-between border-top pt-2">
+                                            <strong>Total:</strong>
+                                            <strong id="total">Ksh. 0.00</strong>
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-4">
+                                        <div class="mb-3">
+                                            <label for="customerName" class="form-label">Customer Name</label>
+                                            <input type="text" class="form-control" id="customerName" placeholder="Walk-in customer">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="paymentMethod" class="form-label">Payment Method</label>
+                                            <select class="form-select" id="paymentMethod">
+                                                <option value="cash">Cash</option>
+                                                <option value="card">Credit Card</option>
+                                                <option value="ewallet">E-Wallet</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <button class="btn btn-success w-100" onclick="processPayment()">
+                                            <i class="bi bi-credit-card"></i> Process Payment
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Barcode Display -->
+                            <div class="card mt-3 d-none" id="barcodeCard">
+                                <div class="card-body barcode-display">
+                                    <h6>Order Barcode</h6>
+                                    <div id="barcodeImage" class="my-3"></div>
+                                    <small class="text-muted">Scan for order verification</small>
+                                    <button class="btn btn-sm btn-outline-primary mt-2" onclick="printBarcode()">
+                                        <i class="bi bi-printer"></i> Print Barcode
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Products Section -->
+                <div id="productsSection" class="section" style="display: none;">
+                    <h2>Product Management</h2>
+                    <!-- Products management UI -->
+                </div>
+
+                <!-- Orders Section -->
+                <div id="ordersSection" class="section" style="display: none;">
+                    <h2>Order History</h2>
+                    <!-- Orders history UI -->
+                </div>
+
+                <!-- Sync Section -->
+                <div id="syncSection" class="section" style="display: none;">
+                    <h2>Sync Status</h2>
+                    <!-- Sync status UI -->
+                </div>
+
+                <!-- Dashboard Section -->
+                <div id="dashboardSection" class="section" style="display: none;">
+                    <h2>Dashboard</h2>
+                    <!-- Dashboard UI -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sync Indicator -->
+    <div class="sync-indicator">
+        <div class="toast" role="alert" id="syncToast">
+            <div class="toast-header">
+                <i class="bi bi-cloud-arrow-up me-2"></i>
+                <strong class="me-auto">Sync Status</strong>
+                <small>Just now</small>
+            </div>
+            <div class="toast-body">
+                <div id="syncMessage">All systems synchronized</div>
+                <div class="progress mt-2 d-none" id="syncProgress">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.0/build/qrcode.min.js"></script>
+    <script>
+        // Configuration
+        const config = {
+            apiBaseUrl: window.location.origin + '/api',
+            deviceId: 'POS-001',
+            offlineMode: false
+        };
+
+        // State
+        let state = {
+            cart: [],
+            products: [],
+            currentOrder: null,
+            connectionStatus: 'online',
+            pendingSyncItems: 0,
+            socket: null
+        };
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeApp();
+        });
+
+        function initializeApp() {
+            registerDevice();
+            loadProducts();
+            setupWebSocket();
+            setupEventListeners();
+            startHeartbeat();
+            startSyncCheck();
+        }
+
+        function registerDevice() {
+            fetch(`${config.apiBaseUrl}/devices/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    device_id: config.deviceId,
+                    name: 'Main POS Terminal',
+                    location: 'Front Counter'
+                })
+            }).then(response => response.json())
+              .then(data => {
+                  document.getElementById('deviceIdInfo').textContent = config.deviceId;
+                  document.getElementById('currentDevice').textContent = config.deviceId;
+              });
+        }
+
+        function loadProducts() {
+            fetch(`${config.apiBaseUrl}/products?available_only=true`)
+                .then(response => response.json())
+                .then(products => {
+                    state.products = products;
+                    renderProducts(products);
+                });
+        }
+
+        function renderProducts(products) {
+            const grid = document.getElementById('productsGrid');
+            grid.innerHTML = '';
+            
+            products.forEach(product => {
+                const productCard = `
+                    <div class="col-md-3 mb-3">
+                        <div class="card product-card" onclick="addToCart('${product.id}')">
+                            <div class="card-body">
+                                <h6 class="card-title">${product.name}</h6>
+                                <p class="card-text text-muted">${product.category || 'Uncategorized'}</p>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="h5 mb-0">Ksh. ${product.price.toFixed(2)}</span>
+                                    ${product.inventory_count !== null ? 
+                                        `<span class="badge ${product.inventory_count > 0 ? 'bg-success' : 'bg-danger'}">
+                                            ${product.inventory_count} in stock
+                                        </span>` : 
+                                        ''
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                grid.innerHTML += productCard;
+            });
+        }
+
+        function addToCart(productId) {
+            const product = state.products.find(p => p.id === productId);
+            if (!product) return;
+            
+            // Check inventory
+            if (product.inventory_count !== null && product.inventory_count <= 0) {
+                showAlert('Product out of stock!', 'danger');
+                return;
+            }
+            
+            const existingItem = state.cart.find(item => item.product_id === productId);
+            
+            if (existingItem) {
+                if (product.inventory_count !== null && existingItem.quantity >= product.inventory_count) {
+                    showAlert('Not enough stock available!', 'warning');
+                    return;
+                }
+                existingItem.quantity++;
+                existingItem.total_price = existingItem.quantity * existingItem.unit_price;
+            } else {
+                state.cart.push({
+                    product_id: product.id,
+                    product_name: product.name,
+                    unit_price: product.price,
+                    quantity: 1,
+                    total_price: product.price
+                });
+            }
+            
+            renderCart();
+            updateTotals();
+        }
+
+        function renderCart() {
+            const cartItems = document.getElementById('cartItems');
+            
+            if (state.cart.length === 0) {
+                cartItems.innerHTML = '<p class="text-muted text-center">Cart is empty</p>';
+                return;
+            }
+            
+            cartItems.innerHTML = state.cart.map(item => `
+                <div class="cart-item">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6 class="mb-1">${item.product_name}</h6>
+                            <small>Ksh. ${item.unit_price.toFixed(2)} each</small>
+                        </div>
+                        <div class="text-end">
+                            <div class="input-group input-group-sm" style="width: 120px;">
+                                <button class="btn btn-outline-secondary" type="button" onclick="updateQuantity('${item.product_id}', -1)">-</button>
+                                <input type="text" class="form-control text-center" value="${item.quantity}" readonly>
+                                <button class="btn btn-outline-secondary" type="button" onclick="updateQuantity('${item.product_id}', 1)">+</button>
+                            </div>
+                            <div class="mt-1">Ksh. ${item.total_price.toFixed(2)}</div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateQuantity(productId, change) {
+            const item = state.cart.find(item => item.product_id === productId);
+            if (!item) return;
+            
+            const product = state.products.find(p => p.id === productId);
+            const newQuantity = item.quantity + change;
+            
+            if (newQuantity < 1) {
+                state.cart = state.cart.filter(item => item.product_id !== productId);
+            } else {
+                if (product.inventory_count !== null && newQuantity > product.inventory_count) {
+                    showAlert('Not enough stock available!', 'warning');
+                    return;
+                }
+                item.quantity = newQuantity;
+                item.total_price = newQuantity * item.unit_price;
+            }
+            
+            renderCart();
+            updateTotals();
+        }
+
+        function updateTotals() {
+            const subtotal = state.cart.reduce((sum, item) => sum + item.total_price, 0);
+            const tax = subtotal * 0.1;
+            const discount = 0; // Could add discount logic
+            const total = subtotal + tax - discount;
+            
+            document.getElementById('subtotal').textContent = `Ksh. ${subtotal.toFixed(2)}`;
+            document.getElementById('tax').textContent = `Ksh. ${tax.toFixed(2)}`;
+            document.getElementById('discount').textContent = `Ksh. ${discount.toFixed(2)}`;
+            document.getElementById('total').textContent = `Ksh. ${total.toFixed(2)}`;
+        }
+
+        function clearCart() {
+            state.cart = [];
+            renderCart();
+            updateTotals();
+        }
+
+        async function processPayment() {
+            if (state.cart.length === 0) {
+                showAlert('Cart is empty!', 'warning');
+                return;
+            }
+            
+            const paymentMethod = document.getElementById('paymentMethod').value;
+            const customerName = document.getElementById('customerName').value || 'Walk-in customer';
+            
+            const subtotal = state.cart.reduce((sum, item) => sum + item.total_price, 0);
+            const tax = subtotal * 0.1;
+            const total = subtotal + tax;
+            
+            const orderData = {
+                device_id: config.deviceId,
+                is_offline: config.offlineMode,
+                items: state.cart,
+                payment_method: paymentMethod,
+                customer_name: customerName,
+                discount_amount: 0
+            };
+            
+            try {
+                const response = await fetch(`${config.apiBaseUrl}/orders`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(orderData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Complete the order
+                    const completeResponse = await fetch(`${config.apiBaseUrl}/orders/${result.order_id}/complete`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            payment_status: 'completed',
+                            payment_method: paymentMethod
+                        })
+                    });
+                    
+                    const completeResult = await completeResponse.json();
+                    
+                    if (completeResult.success) {
+                        state.currentOrder = {
+                            id: result.order_id,
+                            order_number: result.order_number,
+                            barcode: completeResult.barcode
+                        };
+                        
+                        showOrderComplete(result.order_number, completeResult.barcode);
+                        clearCart();
+                        
+                        // Show sync notification if offline
+                        if (config.offlineMode) {
+                            showSyncNotification('Order saved offline. Will sync when connection is restored.');
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Payment processing error:', error);
+                if (config.offlineMode) {
+                    showAlert('Order saved locally in offline mode. Will sync when connection is restored.', 'warning');
+                } else {
+                    showAlert('Payment processing failed!', 'danger');
+                }
+            }
+        }
+
+        function showOrderComplete(orderNumber, barcode) {
+            // Display barcode
+            const barcodeCard = document.getElementById('barcodeCard');
+            const barcodeImage = document.getElementById('barcodeImage');
+            
+            barcodeCard.classList.remove('d-none');
+            
+            if (barcode && barcode.image) {
+                // If we have base64 image
+                barcodeImage.innerHTML = `<img src="data:image/png;base64,${barcode.image}" alt="Order Barcode" class="img-fluid">`;
+            } else if (barcode && barcode.data) {
+                // Generate QR code from data
+                QRCode.toCanvas(barcode.data, { width: 200 }, function(err, canvas) {
+                    if (err) console.error(err);
+                    barcodeImage.innerHTML = '';
+                    barcodeImage.appendChild(canvas);
+                });
+            }
+            
+            // Show success message
+            showAlert(`Order ${orderNumber} completed successfully!`, 'success');
+        }
+
+        function printBarcode() {
+            // Implement barcode printing logic
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <html>
+                    <head>
+                        <title>Print Barcode</title>
+                        <style>
+                            body { text-align: center; padding: 20px; }
+                            img { max-width: 300px; }
+                        </style>
+                    </head>
+                    <body>
+                        <h4>Order: ${state.currentOrder.order_number}</h4>
+                        ${document.getElementById('barcodeImage').innerHTML}
+                        <p>Scan for order verification</p>
+                    </body>
+                </html>
+            `);
+            printWindow.document.close();
+            printWindow.print();
+        }
+
+        function setupWebSocket() {
+            state.socket = io();
+            
+            state.socket.on('connect', () => {
+                updateConnectionStatus('online');
+                state.socket.emit('device_heartbeat', { device_id: config.deviceId });
+            });
+            
+            state.socket.on('disconnect', () => {
+                updateConnectionStatus('offline');
+            });
+            
+            state.socket.on('order_created', (data) => {
+                if (data.device_id !== config.deviceId) {
+                    showSyncNotification(`New order received: ${data.order_number}`);
+                }
+            });
+            
+            state.socket.on('sync_status', (data) => {
+                state.pendingSyncItems = data.pending_items || 0;
+                updateSyncIndicator();
+            });
+            
+            state.socket.on('heartbeat_ack', () => {
+                // Connection is active
+            });
+        }
+
+        function updateConnectionStatus(status) {
+            state.connectionStatus = status;
+            const statusElement = document.getElementById('connectionStatus');
+            
+            if (status === 'online') {
+                statusElement.className = 'badge bg-success';
+                statusElement.innerHTML = '<i class="bi bi-wifi"></i> Online';
+                config.offlineMode = false;
+                document.getElementById('offlineModeToggle').checked = false;
+                document.body.classList.remove('offline-mode');
+            } else {
+                statusElement.className = 'badge bg-danger';
+                statusElement.innerHTML = '<i class="bi bi-wifi-off"></i> Offline';
+                config.offlineMode = true;
+                document.getElementById('offlineModeToggle').checked = true;
+                document.body.classList.add('offline-mode');
+            }
+        }
+
+        function setupEventListeners() {
+            // Offline mode toggle
+            document.getElementById('offlineModeToggle').addEventListener('change', function(e) {
+                config.offlineMode = e.target.checked;
+                if (config.offlineMode) {
+                    document.body.classList.add('offline-mode');
+                    showAlert('Switched to offline mode. Orders will sync when connection is restored.', 'warning');
+                } else {
+                    document.body.classList.remove('offline-mode');
+                    showAlert('Switched to online mode.', 'success');
+                }
+            });
+            
+            // Product search
+            document.getElementById('productSearch').addEventListener('input', function(e) {
+                const searchTerm = e.target.value.toLowerCase();
+                const filteredProducts = state.products.filter(product =>
+                    product.name.toLowerCase().includes(searchTerm) ||
+                    product.category?.toLowerCase().includes(searchTerm)
+                );
+                renderProducts(filteredProducts);
+            });
+            
+            // Category filter
+            document.getElementById('categoryFilter').addEventListener('change', function(e) {
+                const category = e.target.value;
+                const filteredProducts = category ?
+                    state.products.filter(product => product.category === category) :
+                    state.products;
+                renderProducts(filteredProducts);
+            });
+        }
+
+        function startHeartbeat() {
+            setInterval(() => {
+                if (state.socket && state.socket.connected) {
+                    state.socket.emit('device_heartbeat', { device_id: config.deviceId });
+                }
+            }, 30000); // Every 30 seconds
+        }
+
+        function startSyncCheck() {
+            setInterval(() => {
+                if (state.socket && state.socket.connected) {
+                    state.socket.emit('sync_status_request', { device_id: config.deviceId });
+                }
+            }, 60000); // Every minute
+        }
+
+        function updateSyncIndicator() {
+            const syncToast = document.getElementById('syncToast');
+            const syncMessage = document.getElementById('syncMessage');
+            const syncProgress = document.getElementById('syncProgress');
+            
+            if (state.pendingSyncItems > 0) {
+                syncMessage.textContent = `${state.pendingSyncItems} items pending sync`;
+                syncProgress.classList.remove('d-none');
+                syncToast.classList.add('show');
+            } else {
+                syncMessage.textContent = 'All systems synchronized';
+                syncProgress.classList.add('d-none');
+                setTimeout(() => {
+                    syncToast.classList.remove('show');
+                }, 3000);
+            }
+        }
+
+        function showSection(sectionId) {
+            // Hide all sections
+            document.querySelectorAll('.section').forEach(section => {
+                section.style.display = 'none';
+            });
+            
+            // Show selected section
+            document.getElementById(sectionId + 'Section').style.display = 'block';
+            
+            // Update active nav link
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            event.target.classList.add('active');
+        }
+
+        function changeDevice(deviceId) {
+            config.deviceId = deviceId;
+            document.getElementById('currentDevice').textContent = deviceId;
+            document.getElementById('deviceIdInfo').textContent = deviceId;
+            registerDevice();
+            loadProducts();
+        }
+
+        function showAlert(message, type) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            const container = document.querySelector('.container-fluid');
+            container.insertBefore(alertDiv, container.firstChild);
+            
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 5000);
+        }
+
+        function showSyncNotification(message) {
+            const toast = document.getElementById('syncToast');
+            const toastBody = toast.querySelector('.toast-body');
+            toastBody.innerHTML = `
+                <div>${message}</div>
+                <div class="progress mt-2">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div>
+                </div>
+            `;
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 5000);
+        }
+
+        // Expose functions to global scope for onclick handlers
+        window.addToCart = addToCart;
+        window.updateQuantity = updateQuantity;
+        window.processPayment = processPayment;
+        window.printBarcode = printBarcode;
+        window.clearCart = clearCart;
+        window.showSection = showSection;
+        window.changeDevice = changeDevice;
+    </script>
+</body>
+</html>
