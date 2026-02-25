@@ -1,5 +1,7 @@
 import os
 import importlib.util
+import asyncio
+import inspect
 from werkzeug.test import EnvironBuilder
 from werkzeug.wrappers import Response as WSGIResponse
 
@@ -19,20 +21,63 @@ def handler(request, response):
     """
     try:
         method = getattr(request, 'method', 'GET')
-        # headers is a mapping-like object
-        headers = dict(getattr(request, 'headers', {}) or {})
-        path = getattr(request, 'path', None) or getattr(request, 'url', '/')
-        query_string = getattr(request, 'query_string', '') or ''
 
-        # request body - try common attribute names
+        # headers is a mapping-like object
+        try:
+            headers = dict(request.headers or {})
+        except Exception:
+            headers = dict(getattr(request, 'headers', {}) or {})
+
+        # Path and query handling for different request shapes
+        path = '/'
+        query_string = ''
+        try:
+            # Common for Starlette/ASGI Request
+            if hasattr(request, 'url') and getattr(request, 'url') is not None:
+                url = request.url
+                # url may be a URL object
+                path = getattr(url, 'path', str(url))
+            elif hasattr(request, 'path') and request.path:
+                path = request.path
+            elif hasattr(request, 'scope') and isinstance(request.scope, dict):
+                path = request.scope.get('path', '/')
+
+            # query string
+            if hasattr(request, 'query_string') and request.query_string:
+                qs = request.query_string
+                query_string = qs.decode() if isinstance(qs, (bytes, bytearray)) else str(qs)
+            elif hasattr(request, 'query_params') and request.query_params:
+                query_string = str(request.query_params)
+            elif hasattr(request, 'scope') and isinstance(request.scope, dict):
+                qs = request.scope.get('query_string', b'')
+                query_string = qs.decode() if isinstance(qs, (bytes, bytearray)) else str(qs)
+        except Exception:
+            path = getattr(request, 'path', '/') or '/'
+
+        # Body handling (support sync and async request objects)
         body = b''
-        if hasattr(request, 'get_data'):
-            try:
-                body = request.get_data()
-            except Exception:
-                body = getattr(request, 'body', b'') or b''
-        else:
-            body = getattr(request, 'body', b'') or b''
+        try:
+            if hasattr(request, 'get_data'):
+                body = request.get_data() or b''
+            elif hasattr(request, 'body'):
+                candidate = request.body
+                if callable(candidate):
+                    maybe = candidate()
+                    if inspect.isawaitable(maybe):
+                        try:
+                            body = asyncio.get_event_loop().run_until_complete(maybe)
+                        except RuntimeError:
+                            loop = asyncio.new_event_loop()
+                            body = loop.run_until_complete(maybe)
+                            loop.close()
+                    else:
+                        body = maybe or b''
+                else:
+                    body = candidate or b''
+            else:
+                body = getattr(request, 'data', b'') or b''
+        except Exception:
+            body = b''
 
         builder = EnvironBuilder(path=path, method=method, headers=headers, data=body, query_string=query_string)
         env = builder.get_environ()

@@ -899,9 +899,13 @@ if not os.environ.get('VERCEL'):
     sync_thread.start()
 
 # Initialize database
-with app.app_context():
-    db.create_all()
-    logger.info("Database tables created")
+# Avoid running `create_all()` on Vercel serverless (cold starts can fail without DB config).
+if not os.environ.get('VERCEL'):
+    with app.app_context():
+        db.create_all()
+        logger.info("Database tables created")
+else:
+    logger.info("Skipping db.create_all() on Vercel serverless; run migrations manually if needed")
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
