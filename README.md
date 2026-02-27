@@ -1,27 +1,24 @@
 # kingdompublishers
 
-## Deploying to Vercel
+## Vercel deployment (clean setup)
 
-This project is configured to run as Python Serverless Functions on Vercel.
+This repository now uses a **single** Vercel Python entrypoint: `api/index.py`.
+All routes (including `/api/health`) are served by the main Flask app in `POS sytem.py`.
 
-### 1) Import repository
-- Go to **Vercel → Add New Project**.
-- Import this GitHub repository.
-- Keep the **Root Directory** as the repository root.
-- Framework preset: **Other**.
+### Deploy steps
+1. Import the repo at https://vercel.com/new.
+2. Keep root directory as repository root.
+3. Set framework preset to **Other**.
+4. Add environment variables:
+   - `DATABASE_URL`
+   - `SECRET_KEY`
+   - `QR_SECRET` (optional)
+5. Deploy.
 
-### 2) Environment variables
-Set these in **Project Settings → Environment Variables**:
-- `DATABASE_URL`
-- `SECRET_KEY`
-- `QR_SECRET` (optional)
+### Verify
+- `https://<deployment>/api/health`
+- `https://<deployment>/api/products`
 
-### 3) Deploy
-- Trigger deploy (automatic after import).
-- Verify endpoints:
-  - `/api/health`
-  - `/api/products`
-
-### 4) Notes
-- WebSockets are not supported on Vercel serverless functions.
-- HTTP fallback endpoints are available under `/api/ws/*`.
+### Runtime notes
+- WebSockets are not supported by Vercel serverless functions.
+- The app exposes HTTP fallback endpoints under `/api/ws/*`.
