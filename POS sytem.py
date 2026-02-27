@@ -26,11 +26,10 @@ database_url = os.getenv('DATABASE_URL', 'postgresql://user:password@localhost/p
 if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
 
+app = Flask(__name__, static_folder=None)
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
-
-app = Flask(__name__, static_folder=None)
 
 # Configure SocketIO: use a dummy implementation on Vercel (serverless)
 if os.environ.get('VERCEL'):
@@ -92,7 +91,7 @@ class Order(db.Model):
     sync_status = db.Column(db.String(20), default='pending')  # pending, synced, failed
     barcode_data = db.Column(db.Text)  # Stores QR code data
     barcode_image = db.Column(db.Text)  # Base64 encoded QR image
-    metadata = db.Column(JSONB)  # Store additional data like items, timestamps
+    metadata_json = db.Column('metadata', JSONB)  # Store additional data like items, timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -292,7 +291,7 @@ class SyncEngine:
                 sync_status='synced',
                 barcode_data=order_data.get('barcode_data'),
                 barcode_image=order_data.get('barcode_image'),
-                metadata=order_data.get('metadata', {}),
+                metadata_json=order_data.get('metadata', {}),
                 created_at=datetime.fromisoformat(order_data.get('created_at')) if order_data.get('created_at') else datetime.utcnow()
             )
             db.session.add(order)
@@ -491,7 +490,7 @@ def create_order():
         is_online=not is_offline,
         device_id=device_id,
         sync_status='pending' if is_offline else 'synced',
-        metadata={
+        metadata_json={
             'items': items,
             'notes': data.get('notes'),
             'source': 'offline' if is_offline else 'online'
@@ -555,7 +554,7 @@ def create_order():
                 'items': items,
                 'barcode_data': barcode_result['qr_data'] if barcode_result else None,
                 'barcode_image': barcode_result['qr_image'] if barcode_result else None,
-                'metadata': order.metadata,
+                'metadata': order.metadata_json,
                 'created_at': order.created_at.isoformat()
             },
             device_id=device_id
@@ -885,28 +884,30 @@ def http_sync_status():
 # Background sync task
 def background_sync_task():
     """Background task to process sync queue periodically"""
-    while True:
-        try:
-            sync_engine.process_sync_queue()
-        except Exception as e:
-            logger.error(f"Background sync error: {str(e)}")
-        time.sleep(60)  # Run every minute
+    with app.app_context():
+        while True:
+            try:
+                sync_engine.process_sync_queue()
+            except Exception as e:
+                logger.error(f"Background sync error: {str(e)}")
+            time.sleep(60)  # Run every minute
 
-# Start background sync thread
-# On Vercel, we use Cron jobs instead of background threads
-if not os.environ.get('VERCEL'):
-    sync_thread = threading.Thread(target=background_sync_task, daemon=True)
-    sync_thread.start()
 
-# Initialize database
-# Avoid running `create_all()` on Vercel serverless (cold starts can fail without DB config).
-if not os.environ.get('VERCEL'):
+def initialize_runtime():
+    """Initialize DB and background workers for non-serverless runtime."""
+    if os.environ.get('VERCEL'):
+        logger.info("Serverless mode detected; skipping local runtime initialization")
+        return
+
     with app.app_context():
         db.create_all()
         logger.info("Database tables created")
-else:
-    logger.info("Skipping db.create_all() on Vercel serverless; run migrations manually if needed")
+
+    sync_thread = threading.Thread(target=background_sync_task, daemon=True)
+    sync_thread.start()
+
 
 if __name__ == '__main__':
+    initialize_runtime()
     port = int(os.getenv('PORT', 5000))
     socketio.run(app, debug=False, host='0.0.0.0', port=port)
