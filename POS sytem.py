@@ -884,28 +884,30 @@ def http_sync_status():
 # Background sync task
 def background_sync_task():
     """Background task to process sync queue periodically"""
-    while True:
-        try:
-            sync_engine.process_sync_queue()
-        except Exception as e:
-            logger.error(f"Background sync error: {str(e)}")
-        time.sleep(60)  # Run every minute
+    with app.app_context():
+        while True:
+            try:
+                sync_engine.process_sync_queue()
+            except Exception as e:
+                logger.error(f"Background sync error: {str(e)}")
+            time.sleep(60)  # Run every minute
 
-# Start background sync thread
-# On Vercel, we use Cron jobs instead of background threads
-if not os.environ.get('VERCEL'):
-    sync_thread = threading.Thread(target=background_sync_task, daemon=True)
-    sync_thread.start()
 
-# Initialize database
-# Avoid running `create_all()` on Vercel serverless (cold starts can fail without DB config).
-if not os.environ.get('VERCEL'):
+def initialize_runtime():
+    """Initialize DB and background workers for non-serverless runtime."""
+    if os.environ.get('VERCEL'):
+        logger.info("Serverless mode detected; skipping local runtime initialization")
+        return
+
     with app.app_context():
         db.create_all()
         logger.info("Database tables created")
-else:
-    logger.info("Skipping db.create_all() on Vercel serverless; run migrations manually if needed")
+
+    sync_thread = threading.Thread(target=background_sync_task, daemon=True)
+    sync_thread.start()
+
 
 if __name__ == '__main__':
+    initialize_runtime()
     port = int(os.getenv('PORT', 5000))
     socketio.run(app, debug=False, host='0.0.0.0', port=port)

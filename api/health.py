@@ -1,9 +1,2 @@
-"""Lightweight health endpoint for Vercel routing checks."""
-from flask import Flask, jsonify
-
-app = Flask(__name__)
-
-
-@app.route('/api/health', methods=['GET'])
-def health():
-    return jsonify({'status': 'ok'})
+"""Vercel health function using the main Flask app routes."""
+from api.index import app
