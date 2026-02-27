@@ -26,11 +26,10 @@ database_url = os.getenv('DATABASE_URL', 'postgresql://user:password@localhost/p
 if database_url and database_url.startswith("postgres://"):
     database_url = database_url.replace("postgres://", "postgresql://", 1)
 
+app = Flask(__name__, static_folder=None)
 app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
-
-app = Flask(__name__, static_folder=None)
 
 # Configure SocketIO: use a dummy implementation on Vercel (serverless)
 if os.environ.get('VERCEL'):
@@ -92,7 +91,7 @@ class Order(db.Model):
     sync_status = db.Column(db.String(20), default='pending')  # pending, synced, failed
     barcode_data = db.Column(db.Text)  # Stores QR code data
     barcode_image = db.Column(db.Text)  # Base64 encoded QR image
-    metadata = db.Column(JSONB)  # Store additional data like items, timestamps
+    metadata_json = db.Column('metadata', JSONB)  # Store additional data like items, timestamps
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -292,7 +291,7 @@ class SyncEngine:
                 sync_status='synced',
                 barcode_data=order_data.get('barcode_data'),
                 barcode_image=order_data.get('barcode_image'),
-                metadata=order_data.get('metadata', {}),
+                metadata_json=order_data.get('metadata', {}),
                 created_at=datetime.fromisoformat(order_data.get('created_at')) if order_data.get('created_at') else datetime.utcnow()
             )
             db.session.add(order)
@@ -491,7 +490,7 @@ def create_order():
         is_online=not is_offline,
         device_id=device_id,
         sync_status='pending' if is_offline else 'synced',
-        metadata={
+        metadata_json={
             'items': items,
             'notes': data.get('notes'),
             'source': 'offline' if is_offline else 'online'
@@ -555,7 +554,7 @@ def create_order():
                 'items': items,
                 'barcode_data': barcode_result['qr_data'] if barcode_result else None,
                 'barcode_image': barcode_result['qr_image'] if barcode_result else None,
-                'metadata': order.metadata,
+                'metadata': order.metadata_json,
                 'created_at': order.created_at.isoformat()
             },
             device_id=device_id
